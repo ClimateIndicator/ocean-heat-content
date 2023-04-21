@@ -1,0 +1,6 @@
+name: ocean-heat-content
+channels:
+  - conda-forge
+dependencies:
+  - numpy
+  - pandas
