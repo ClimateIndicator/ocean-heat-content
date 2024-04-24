@@ -7,6 +7,7 @@ import csv
 from datetime import date
 import os.path
 
+
 def read_JMA(datadir=os.path.expanduser('~/Data/JMA/'),
              filename='OHC_0-700.txt'):
     f = open(datadir + filename, "r")
@@ -14,7 +15,7 @@ def read_JMA(datadir=os.path.expanduser('~/Data/JMA/'),
     keys = ['Year', 'HeatContentAnomaly', 'Uncertainty (1-Sigma)']
     f.close()
     ncols = len(lines[-1].split())  # Get number of columns from the last line..
-    nrows = len(lines) # Get number of data lines in text file
+    nrows = len(lines)  # Get number of data lines in text file
     data = np.zeros([nrows, ncols])  # Convention of rows then columns for Numpy arrays (?)
     for jj in range(nrows):
         for ii in range(ncols):
@@ -31,7 +32,7 @@ def read_JMA(datadir=os.path.expanduser('~/Data/JMA/'),
 
 
 def read_NCEI(datadir=os.path.expanduser('~/Data/NCEI/'),
-              filename='teos-w0-700m.txt',
+              filename='h22-w0-700m.dat',
               key1='WO',
               key2='WOse', skip=1):
     f = open(datadir + filename, "r")
@@ -55,54 +56,31 @@ def read_NCEI(datadir=os.path.expanduser('~/Data/NCEI/'),
 
     return yrs, series, error
 
-def read_IAP(datadir=os.path.expanduser('~/Data/Cheng/'),
-               filename='AR6_data_IAP_Ocean_heat_content_data_2023update.txt',
-               key1='OHC0-700m',
-               key2='0-700mError, 95% CI is OHC+/-Error',
-               skip=17):
-    # Compute weights for calculation of annual means
-    mon_days = np.array([31., 28., 31., 30., 31., 30., 31., 31., 30., 31., 30., 31.])
-    weights = mon_days / mon_days.sum()
+
+def read_IAP(datadir=os.path.expanduser('~/Data/IAP/'),
+               filename='OHC0_700m_annual_timeseries_1981_2010baseline_IAPv4.txt'):
 
     f = open(datadir + filename, "r")
     lines = f.readlines()
-    header = lines[skip - 1].strip('\n')
-    keys = header.split("] [")
-    keys[0] = keys[0].strip("[")
-    keys[-1] = keys[-1].strip("] ")
     f.close()
     ncols = len(lines[-1].split())  # Get number of columns from the last line..
-    nrows = len(lines) - skip  # Get number of data lines in text file
+    nrows = len(lines)  # Get number of data lines in text file
     data = np.zeros([nrows, ncols])  # Convention of rows then columns for Numpy arrays (?)
     for jj in range(nrows):
         for ii in range(ncols):
-            data[jj, ii] = float(lines[jj + skip].split()[ii])
-    data_dict = dict.fromkeys(keys)
-    for kk, key in enumerate(keys):
-        data_dict[key] = data[:, kk]
+            data[jj, ii] = float(lines[jj].split()[ii])
 
-    yrs = data_dict['year']
-    series = data_dict[key1]
-    error = data_dict[key2]
-
-    syr = np.min(yrs)  # Code assumes that ONLY complete years are present in the file..
-    lyr = np.max(yrs)
-
-    ann_yrs = np.arange(syr, lyr + 1)
-    ann_series = np.zeros_like(ann_yrs)
-    ann_error = np.zeros_like(ann_yrs)
+    yrs = data[:, 0]
+    series = data[:, 1]
+    error = data[:, 2]
 
     ratio = 1.0 / 1.96  # Convert errors to +/- 1 standard deviation
 
-    for aa, anyr in enumerate(ann_yrs):
-        ind = np.where(yrs == anyr)[0]
-        ann_series[aa] = np.average(series[ind], weights=weights)
-        ann_error[aa] = np.average(error[ind], weights=weights)
-    # Express years as mid-points..
-    return ann_yrs + 0.5, ann_series, ann_error * ratio
+    return yrs, series, error * ratio
+
 
 def read_EN4(datadir=os.path.expanduser('~/Data/EN4/'),
-             filename='MOHC_OHC_19502022_0700m_clim19502022_EN.4.2.2.g10.txt',
+             filename='OHC_series_1950_2023_MOHC_g10_19502023clim_0700m.txt',
              key1='HC_anomaly(Joules)',
              key2='+/-(1s.e.)', skip=1):
     f = open(datadir + filename, "r")
@@ -126,7 +104,28 @@ def read_EN4(datadir=os.path.expanduser('~/Data/EN4/'),
 
     return yrs, series, error
 
-def extract_period(yrs, series, fyr=1971.5, lyr=2022.5):
+
+def read_Domingues(datadir=os.path.expanduser('~/Data/Domingues/'),
+               filename='GOHC0700m_timeseries.txt'):
+
+    f = open(datadir + filename, "r")
+    lines = f.readlines()
+    f.close()
+    ncols = len(lines[-1].split())  # Get number of columns from the last line..
+    nrows = len(lines)  # Get number of data lines in text file
+    data = np.zeros([nrows, ncols])  # Convention of rows then columns for Numpy arrays (?)
+    for jj in range(nrows):
+        for ii in range(ncols):
+            data[jj, ii] = float(lines[jj].split()[ii])
+
+    yrs = data[:, 0]
+    series = data[:, 1] * 10.0 # Convert to Zetta Joules
+    error = data[:, 2] * 10.0 # Convert to Zetta Joules
+
+    return yrs, series, error
+
+
+def extract_period(yrs, series, fyr=1971.5, lyr=2023.5):
     """
     This function extracts a subsection of a timeseries on the basis of specified first and last years
     inputs:
@@ -161,13 +160,13 @@ def runningmean(yrs, series, window=3):
     return rmseries
 
 color_dict = {'IAP':'tab:purple',
-           'Dom08':'tab:blue',
+           'Dom':'tab:blue',
            'EN4':'tab:red',
            'JMA':'tab:green',
            'NCEI':'tab:orange'}
 
 # Define ensemble members for each vertical layer..
-ohc_names = {'0-700m':['NCEI', 'JMA', 'EN4', 'IAP'],
+ohc_names = {'0-700m':['NCEI', 'JMA', 'EN4', 'IAP', 'Dom'],
             '700-2000m':['NCEI', 'JMA', 'IAP']}
 
 # Build dictionaries from updated OHC timeseries read in directly from individual files..
@@ -177,34 +176,40 @@ ohc_dict_700to2000m = {}
 ohc_dict_700to2000m_err = {}
 
 # Select a range of years that can be accommodated by all products..
-fyr = 1957.5
-lyr = 2022.5
+fyr = 1970.5 # The Domingues et al product is only available from 1970 onwards
+lyr = 2023.5
 
 # Read in the EN4 timeseries..
 yrs, series, eseries = read_EN4()
 subyrs, subseries = extract_period(yrs, series, fyr=fyr, lyr=lyr)
 subyrs, subeseries = extract_period(yrs, eseries, fyr=fyr, lyr=lyr)
-ohc_dict_0to700m['yrs'] = subyrs
 ohc_dict_0to700m['EN4'] = subseries
-ohc_dict_0to700m_err['yrs'] = subyrs
 ohc_dict_0to700m_err['EN4'] = subeseries
+
+# Read in the Domingues timeseries..
+yrs, series, eseries = read_Domingues()
+subyrs, subseries = extract_period(yrs, series, fyr=fyr, lyr=lyr)
+subyrs, subeseries = extract_period(yrs, eseries, fyr=fyr, lyr=lyr)
+ohc_dict_0to700m['Dom'] = subseries
+ohc_dict_0to700m_err['Dom'] = subeseries
 
 # Read in the NCEI timeseries..
 yrs1, series1, eseries1 = read_NCEI()
-yrs2, series2, eseries2 = read_NCEI(filename='1yr-h22-w700-2000m.txt')
+yrs2, series2, eseries2 = read_NCEI(filename='h22-w0-2000m_merged.dat')
 subyrs1, subseries1 = extract_period(yrs1, series1, fyr=fyr, lyr=lyr)
 subyrs1, subeseries1 = extract_period(yrs1, eseries1, fyr=fyr, lyr=lyr)
 subyrs2, subseries2 = extract_period(yrs2, series2, fyr=fyr, lyr=lyr)
 subyrs2, subeseries2 = extract_period(yrs2, eseries2, fyr=fyr, lyr=lyr)
+ohc_dict_0to700m['yrs'] = subyrs1
 ohc_dict_0to700m['NCEI'] = subseries1
 ohc_dict_0to700m_err['NCEI'] = subeseries1
 ohc_dict_700to2000m['yrs'] = subyrs2
-ohc_dict_700to2000m['NCEI'] = subseries2
-ohc_dict_700to2000m_err['NCEI'] = subeseries2
+ohc_dict_700to2000m['NCEI'] = subseries2 - subseries1 # Estimate 700-2000 m by subtracting layers
+ohc_dict_700to2000m_err['NCEI'] = subeseries2 * (1300./2000.) # Estimate based on scaled ratio of levels
 
 # Read in the IAP timeseries..
 yrs1, series1, eseries1 = read_IAP()
-yrs2, series2, eseries2 = read_IAP(key1='OHC700-2000m', key2='700-2000mError, 95% CI is OHC+/-Error')
+yrs2, series2, eseries2 = read_IAP(filename='OHC700_2000m_annual_timeseries_1981_2010baseline_IAPv4.txt')
 subyrs1, subseries1 = extract_period(yrs1, series1, fyr=fyr, lyr=lyr)
 subyrs1, subeseries1 = extract_period(yrs1, eseries1, fyr=fyr, lyr=lyr)
 subyrs2, subseries2 = extract_period(yrs2, series2, fyr=fyr, lyr=lyr)
@@ -237,12 +242,14 @@ ensm_ohc_dict['baseline period'] = '1995-2014'
 # Generate and plot the ensemble..
 #-----------------------------
 
+datestr = date.isoformat(date.today()) # Get string to represent processing date
+
 # Generate array of years common to all ensemble members
-core_yrs = np.arange(1971.5, 2022.5 + 1, 1.0) # Generate at timeseries of years from 1971.5 to 2022.5
+core_yrs = np.arange(1971.5, 2023.5 + 1, 1.0) # Generate at timeseries of years from 1971.5 to 2023.5
 fyr = core_yrs[0]
 lyr = core_yrs[-1]
 
-plotdir = os.path.expanduser('~/python/ar6/src/notebooks/plots/')
+plotdir = os.path.expanduser('~/python/IGCC/src/notebooks/plots/')
 
 byr1=1995.5 # Set basline period used in AR6 and extract indices
 byr2=2014.5
@@ -250,7 +257,7 @@ bindex = np.where((yrs >= byr1) & (yrs <= byr2))[0]
 
 
 for layer in ['0-700m', '700-2000m']:
-    plotfile = 'plot_OHC_ensemble_structural_mapping_uncertainty_'+layer+'_IPCC_update.png'
+    plotfile = 'plot_OHC_ensemble_structural_mapping_uncertainty_'+layer+'_IGCC_'+datestr+'.png'
 
     names = ohc_names[layer]
     nprod = len(names)
@@ -270,14 +277,16 @@ for layer in ['0-700m', '700-2000m']:
         # Apply common baseline period..
         series -= series[bindex].mean()
 
-        series = runningmean(yrs, series)  # Apply 3-year running mean as per Domingues et al.
-        eseries = runningmean(yrs, eseries)
+        if name in ['NCEI', 'JMA', 'EN4', 'IAP']: # Domingues already has a 3-year smoothing applied
+            print('Applying 3-year running mean to '+name+'...')
+            series = runningmean(yrs, series)  # Apply 3-year running mean as per Domingues et al.
+            eseries = runningmean(yrs, eseries)
 
         subyrs, subseries = extract_period(yrs, series, fyr=fyr, lyr=lyr)
         subyrs, subeseries = extract_period(yrs, eseries, fyr=fyr, lyr=lyr)
 
-        if (layer == '0-700m') & (name == 'JMA'):
-            ensm_ohc_dict['ocean_' + layer] = subseries - subseries[0] # Input JMA as central estimate for 0-700m layer
+        if (layer == '0-700m') & (name == 'Dom'):
+            ensm_ohc_dict['ocean_' + layer] = subseries - subseries[0] # Input Domingues as central estimate for 0-700m layer
             ensm_ohc_dict['yrs'] = subyrs
 
         if (layer == '700-2000m') & (name == 'JMA'):
@@ -356,7 +365,7 @@ nzi = np.where(ohc != 0.0)[0]
 ohc_fit=np.polyfit(yrs[nzi], ohc[nzi], 1) # Get linear fits for extrapolation
 err_fit=np.polyfit(yrs[nzi], ohc_err[nzi], 1)
 yi = np.where(yrs <= yrs[nzi[-1]])[0] # Isolate the years up to final year
-new_yrs = np.array([2019.5, 2020.5, 2021.5, 2022.5])
+new_yrs = np.array([2019.5, 2020.5, 2021.5, 2022.5, 2023.5])
 extrp1 = np.poly1d(ohc_fit) # Create extrapolation function
 new_ohc = extrp1(new_yrs)   # Get extrapolated values
 extrp2 = np.poly1d(err_fit)
@@ -379,11 +388,10 @@ ensm_ohc_dict['ocean_Full-depth_error'] = ensm_ohc_dict['ocean_0-700m_error'] + 
 #-------------------------------------------------
 # Write the OHC ensemble to CSV / *.pickle file..
 #-------------------------------------------------
-datestr = date.isoformat(date.today()) # Get string to represent processing date
 
-savedir  = os.path.expanduser('~/python/ar6/src/notebooks/data/')
-pickle_file = 'AR6_OHC_ensemble_IPCC_update_'+datestr+'.pickle'
-csv_file = 'AR6_OHC_ensemble_IPCC_update_'+datestr+'.csv'
+savedir  = os.path.expanduser('~/python/IGCC/src/notebooks/data/')
+pickle_file = 'AR6_OHC_ensemble_IGCC_update_'+datestr+'.pickle'
+csv_file = 'AR6_OHC_ensemble_IGCC_update_'+datestr+'.csv'
 
 ohc_0to700m = ensm_ohc_dict['ocean_0-700m']
 ohc_700to200m = ensm_ohc_dict['ocean_700-2000m']
