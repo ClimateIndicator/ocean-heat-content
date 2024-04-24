@@ -2,5 +2,9 @@ name: ocean-heat-content
 channels:
   - conda-forge
 dependencies:
+  - jupyter
+  - iris
+  - matplotlib
   - numpy
   - pandas
+  - scipy
